@@ -1,9 +1,9 @@
 import { record } from '../src'
 
 const cvsEl = document.getElementById('canvas') as HTMLCanvasElement
-const stop = record(
+record(
   cvsEl,
-  () => {}
+  { fps: 30 }
 )
 
 ;(function init () {
@@ -18,5 +18,5 @@ const stop = record(
     return Math.round(Math.random() * 255)
   }
 
-  document.getElementById('stop')?.addEventListener('click', stop)
+  // document.getElementById('stop')?.addEventListener('click', stop)
 })()

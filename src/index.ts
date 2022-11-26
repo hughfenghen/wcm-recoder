@@ -1,11 +1,17 @@
 import MyWorker from './worker?worker&inline'
 
 export function record (
-  sourceEl: HTMLCanvasElement
+  sourceEl: HTMLCanvasElement,
+  opts: { fps: number }
 ): void {
   const worker = new MyWorker()
   worker.postMessage({
-    type: 'start'
+    type: 'start',
+    data: {
+      fps: opts.fps,
+      width: sourceEl.width,
+      height: sourceEl.height
+    }
   })
 
   worker.onmessage = async (evt: MessageEvent) => {
