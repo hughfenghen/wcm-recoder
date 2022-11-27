@@ -1,4 +1,4 @@
-import mp4box from 'mp4box'
+import mp4box, { MP4File } from 'mp4box'
 import { IEncoderConf } from './interface'
 
 console.log(mp4box)
@@ -18,14 +18,14 @@ self.onmessage = (evt: MessageEvent) => {
   const { type, data } = evt.data
   switch (type) {
     case 'start':
-      if (STATE === State.Preparing) init(evt.data)
+      if (STATE === State.Preparing) init(data)
       break
     // todo
     case 'pause':
     case 'stop':
       break
     case 'ImageBitmap':
-      console.log('ImageBitmap', data)
+      // console.log('ImageBitmap', data)
       imgBitmapHandler(data)
       break
   }
@@ -34,11 +34,12 @@ self.onmessage = (evt: MessageEvent) => {
 function init (opts: IEncoderConf): void {
   STATE = State.Running
 
+  const outHandler = createOutHandler(opts)
   encoder = new VideoEncoder({
     error: (err) => {
       console.error('VideoEncoder error : ', err)
     },
-    output: encoderOutputHandler
+    output: outHandler.handler
   })
 
   encoder.configure({
@@ -54,22 +55,64 @@ function init (opts: IEncoderConf): void {
     avc: { format: 'annexb' }
   })
 
+  imgBitmapHandler = createImgBitmapHandler(encoder)
   setInterval(() => {
     self.postMessage({ type: 'getImageBitmap' })
-    imgBitmapHandler = createImgBitmapHandler()
   }, 1000 / opts.fps)
 }
 
-const encoderOutputHandler: EncodedVideoChunkOutputCallback = (
-  chunk, meta
-): void => {
-  console.log(3333, chunk, meta)
+const createOutHandler: (opts: IEncoderConf) => {
+  handler: EncodedVideoChunkOutputCallback
+  outputFile: MP4File
+} = (opts) => {
+  const outputFile = mp4box.createFile()
+  const timescale = 1_000_000
+  const videoEncodingTrackOptions = {
+    // 微秒
+    timescale,
+    width: opts.width,
+    height: opts.height,
+    brands: ['isom', 'iso2', 'avc1', 'mp41'],
+    avcDecoderConfigRecord: null as AllowSharedBufferSource | undefined | null
+  }
+
+  let vTrackId: number
+  const startTime = performance.now()
+  const lastTime = startTime
+  return {
+    outputFile,
+    handler: (chunk, meta) => {
+      if (vTrackId == null) {
+        videoEncodingTrackOptions.avcDecoderConfigRecord = meta.decoderConfig?.description
+        vTrackId = outputFile.addTrack(videoEncodingTrackOptions)
+      }
+      const buf = new ArrayBuffer(chunk.byteLength)
+      chunk.copyTo(buf)
+
+      const now = performance.now()
+      const dts = (now - startTime) * 1000
+      // todo: insert sei
+      outputFile.addSample(
+        vTrackId,
+        buf,
+        {
+          // 每帧时长，单位微秒
+          duration: (now - lastTime) * 1000,
+          dts,
+          cts: dts,
+          is_sync: chunk.type === 'key'
+        }
+      )
+    }
+  }
 }
 
-const createImgBitmapHandler = (): (img: ImageBitmap) => void => {
+const createImgBitmapHandler = (
+  encoder: VideoEncoder
+): (img: ImageBitmap) => void => {
   let frameCount = 0
   const startTime = performance.now()
-  let lastTime = performance.now()
+  let lastTime = startTime
 
   return (img) => {
     const now = performance.now()
@@ -85,3 +128,5 @@ const createImgBitmapHandler = (): (img: ImageBitmap) => void => {
     frameCount += 1
   }
 }
+
+// init (ImageBitmap) -> encoder -> outputhandler (h264) -> mp4box (mp4)
