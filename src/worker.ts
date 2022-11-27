@@ -1,8 +1,6 @@
 import mp4box, { MP4File } from 'mp4box'
 import { IEncoderConf } from './interface'
 
-console.log(mp4box)
-
 enum State {
   Preparing = 'preparing',
   Running = 'running',
@@ -34,10 +32,12 @@ self.onmessage = (evt: MessageEvent) => {
 function init (opts: IEncoderConf): void {
   STATE = State.Running
 
+  let getImgTimerId = 0
   const outHandler = createOutHandler(opts)
   encoder = new VideoEncoder({
     error: (err) => {
       console.error('VideoEncoder error : ', err)
+      clearInterval(getImgTimerId)
     },
     output: outHandler.handler
   })
@@ -56,9 +56,15 @@ function init (opts: IEncoderConf): void {
   })
 
   imgBitmapHandler = createImgBitmapHandler(encoder)
-  setInterval(() => {
+  getImgTimerId = setInterval(() => {
     self.postMessage({ type: 'getImageBitmap' })
   }, 1000 / opts.fps)
+
+  const stream = convertFile2Stream(outHandler.outputFile)
+  ; (self as DedicatedWorkerGlobalScope).postMessage({
+    type: 'outputStream',
+    data: stream
+  }, [stream] as any)
 }
 
 const createOutHandler: (opts: IEncoderConf) => {
@@ -130,3 +136,27 @@ const createImgBitmapHandler = (
 }
 
 // init (ImageBitmap) -> encoder -> outputhandler (h264) -> mp4box (mp4)
+
+function convertFile2Stream (file: MP4File): ReadableStream<ArrayBuffer> {
+  let timerId = 0
+  let sendedBoxIdx = 0
+  const boxes = file.boxes
+  return new ReadableStream({
+    start (ctrl) {
+      timerId = setInterval(() => {
+        const ds = new mp4box.DataStream()
+        // console.log(1111, ds.buffer)
+        ds.endianness = mp4box.DataStream.BIG_ENDIAN
+        for (let i = sendedBoxIdx; i < boxes.length; i++) {
+          boxes[i].write(ds)
+        }
+        sendedBoxIdx = boxes.length
+        ctrl.enqueue(ds.buffer)
+      }, 500)
+    },
+    cancel () {
+      clearInterval(timerId)
+      // todo: stop
+    }
+  })
+}

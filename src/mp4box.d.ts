@@ -62,6 +62,8 @@ declare module 'mp4box' {
   const DataStream: {
     BIG_ENDIAN: unknown
     END_ENDIAN: unknown
+    prototype: DataStream
+    new(): DataStream
   }
 
   interface DataStream {
@@ -106,7 +108,7 @@ declare module 'mp4box' {
   const DefExp: {
     MP4File: MP4File
     createFile: () => MP4File
-    DataStream: () => DataStream
+    DataStream: typeof DataStream
   }
 
   export default DefExp
