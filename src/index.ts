@@ -1,9 +1,9 @@
 import MyWorker from './worker?worker&inline'
 
-export function record (
+export async function record (
   sourceEl: HTMLCanvasElement,
   opts: { fps: number }
-): void {
+): Promise<ReadableStream> {
   const worker = new MyWorker()
   worker.postMessage({
     type: 'start',
@@ -14,8 +14,9 @@ export function record (
     }
   })
 
+  let rsResolve
   worker.onmessage = async (evt: MessageEvent) => {
-    const { type } = evt.data
+    const { type, data } = evt.data
     let img
     switch (type) {
       case 'getImageBitmap':
@@ -24,6 +25,13 @@ export function record (
           type: 'ImageBitmap',
           data: img
         }, [img])
+        break
+      case 'outputStream':
+        rsResolve(data as ReadableStream)
+        break
     }
   }
+  return await new Promise((resolve) => {
+    rsResolve = resolve
+  })
 }

@@ -79,12 +79,19 @@ const createOutHandler: (opts: IEncoderConf) => {
     width: opts.width,
     height: opts.height,
     brands: ['isom', 'iso2', 'avc1', 'mp41'],
+    // brands: ['avc1'],
     avcDecoderConfigRecord: null as AllowSharedBufferSource | undefined | null
   }
 
   let vTrackId: number
   const startTime = performance.now()
   const lastTime = startTime
+
+  // setTimeout(() => {
+  //   // @ts-expect-error
+  //   console.log(4444555, outputFile.getInfo(vTrackId))
+  // }, 1000)
+
   return {
     outputFile,
     handler: (chunk, meta) => {
