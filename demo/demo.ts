@@ -1,3 +1,4 @@
+import mp4box from 'mp4box'
 import { record } from '../src'
 
 const cvsEl = document.getElementById('canvas') as HTMLCanvasElement
@@ -16,14 +17,15 @@ const videoEl = document.getElementById('video') as HTMLVideoElement
     { fps: 30 }
   )
 
-  videoEl.src = URL.createObjectURL(convertStream2MediaSource(stream))
+  // videoEl.src = URL.createObjectURL(convertStream2MediaSource(stream))
+  console.log(99999, videoEl.src)
 
-  // logStream(stream.getReader())
+  logStream(stream.getReader())
 
   document.getElementById('play')?.addEventListener('click', () => {
     // videoEl.src = URL.createObjectURL(new Blob([move]))
     videoEl.play()
-    // download('abc.mp4', move)
+    download('abc.mp4', segs)
   })
   // document.getElementById('stop')?.addEventListener('click', stop)
 })()
@@ -32,35 +34,81 @@ function rand255(): number {
   return Math.round(Math.random() * 255)
 }
 
-let move = new ArrayBuffer(0)
-let c = 0
+
+let segs: ArrayBuffer[] = []
+const mfile = mp4box.createFile()
+mfile.onReady = (info) => {
+  console.log('---- mp4 info', info, info.tracks[0].id)
+  mfile.onSegment = function (id, user, buffer, sampleNumber, last) {
+    segs.push(buffer)
+    // console.log(5555, { id, user, buffer, sampleNumber, last })
+  }
+  mfile.setSegmentOptions(info.tracks[0].id, null, { nbSamples: 10 });
+  var initSegs = mfile.initializeSegmentation();
+  segs.push(initSegs[0].buffer)
+  console.log('---- init segs: ', initSegs, segs)
+  mfile.start();
+}
+
+let count = 0
+let offset = 0
 async function logStream(reader: ReadableStreamDefaultReader) {
-  if (c > 0) return
+  // if (count > 1) return
   const { done, value } = await reader.read()
   if (done) return
-  move = concatAB(move, value)
-  c += 1
-  // console.log(3333, value)
+  // console.log(444444, value)
+  // download('111.mp4', value)
+  // count += 1
+
+  value.fileStart = offset
+  offset = mfile.appendBuffer(value)
   await logStream(reader)
 }
 
 function convertStream2MediaSource(stream: ReadableStream): MediaSource {
   const ms = new MediaSource()
-  const reader = stream.getReader()
-  // const mimeCodec = 'video/mp4; codecs="avc1.42E01F,mp4a.40.2"';
-  const mimeCodec = 'video/mp4; codecs="avc1.42E01F"';
+  // const reader = stream.getReader()
+  const mimeCodec = 'video/mp4; codecs="avc1.42E01E,mp4a.40.2"';
+  // const mimeCodec = 'video/mp4; codecs="avc1.42E01F"';
 
-  let sourceBuffer
   ms.addEventListener('sourceopen', async () => {
-    console.log(66666, 'sourceopen')
-    sourceBuffer = ms.addSourceBuffer(mimeCodec)
-    await updateSB()
+    const sourceBuffer = ms.addSourceBuffer(mimeCodec)
+    console.log('------ sourceopen, sb mode: ', sourceBuffer.mode)
+    // videoEl.play()
 
-    sourceBuffer.addEventListener('update', async () => {
+    function readData() {
+      console.log('----- readData', sourceBuffer.updating, segs.length)
+      if (segs.length === 0) {
+        const timerId = setTimeout(() => {
+          readData()
+        }, 500)
+        return
+      }
+      if (!sourceBuffer.updating && segs.length > 0) {
+        const bufs = segs.reduce(
+          (acc, cur) => concatAB(acc, cur), 
+          new Uint8Array(0)
+        )
+        const u8 = new Uint8Array(bufs)
+        // u8.set([1,1,1,1], 0)
+        sourceBuffer.appendBuffer(bufs)
+        console.log(33333334, bufs, sourceBuffer.buffered)
+        segs = []
+      }
+    }
+
+    sourceBuffer.addEventListener('error', console.error)
+    sourceBuffer.addEventListener('abort', console.error)
+    sourceBuffer.addEventListener('updatestart', console.error)
+    sourceBuffer.addEventListener('update', console.error)
+    sourceBuffer.addEventListener('updateend', async () => {
       console.log('sb updateend, ms state: ', ms.readyState)
-      // ms.endOfStream('decode')
-      // await updateSB()
+      readData()
     })
+
+    const timerId = setTimeout(() => {
+      readData()
+    }, 2000)
   });
   ms.addEventListener('sourceclose', (evt) => {
     console.log(7777, evt, ms.readyState, ms.sourceBuffers)
@@ -69,23 +117,6 @@ function convertStream2MediaSource(stream: ReadableStream): MediaSource {
     console.log(88888, evt, ms.readyState, ms.sourceBuffers)
   })
 
-  // const timerId = setTimeout(() => {
-  //   ms.endOfStream('decode')
-  // }, 2000)
-
-  async function updateSB () {
-    const { done, value } = await reader.read()
-    if (done) return
-    console.log('----- add buf', value, ms.readyState, sourceBuffer.updating)
-    if (sourceBuffer.updating) {
-      console.error('---------- updating ---------')
-    } else {
-      sourceBuffer.appendBuffer(value)
-    }
-    console.log('----- afater add buf', ms.readyState, sourceBuffer.updating)
-    // updateSB()
-  }
- 
   return ms
 }
 
@@ -98,8 +129,8 @@ function concatAB(buffer1: ArrayBuffer, buffer2: ArrayBuffer): ArrayBuffer {
   return tmp.buffer
 };
 
-function download(filename: string, buffer: ArrayBuffer): void {
-  const blob = new Blob([buffer])
+function download(filename: string, buffers: ArrayBuffer[]): void {
+  const blob = new Blob(buffers)
   const url = window.URL.createObjectURL(blob)
   const a = document.createElement('a')
   // Required in Firefox
