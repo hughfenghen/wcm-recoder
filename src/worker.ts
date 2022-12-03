@@ -51,8 +51,9 @@ function init (opts: IEncoderConf): void {
     // 码率
     bitrate: 3_000_000,
     // mac 自带播放器只支持avc
-    // avc: { format: 'avc' }
-    avc: { format: 'annexb' }
+    avc: { format: 'avc' }
+    // mp4box.js 无法解析 annexb 的详细 mimeCodec ，只会显示 avc1
+    // avc: { format: 'annexb' }
   })
 
   imgBitmapHandler = createImgBitmapHandler(encoder)
@@ -85,12 +86,7 @@ const createOutHandler: (opts: IEncoderConf) => {
 
   let vTrackId: number
   const startTime = performance.now()
-  const lastTime = startTime
-
-  // setTimeout(() => {
-  //   // @ts-expect-error
-  //   console.log(4444555, outputFile.getInfo(vTrackId))
-  // }, 1000)
+  let lastTime = startTime
 
   return {
     outputFile,
@@ -104,13 +100,16 @@ const createOutHandler: (opts: IEncoderConf) => {
 
       const now = performance.now()
       const dts = (now - startTime) * 1000
+      const duration = (now - lastTime) * 1000
+      // console.log(44444, 'chunk', { dts, duration })
+      lastTime = now
       // todo: insert sei
       outputFile.addSample(
         vTrackId,
         buf,
         {
           // 每帧时长，单位微秒
-          duration: (now - lastTime) * 1000,
+          duration,
           dts,
           cts: dts,
           is_sync: chunk.type === 'key'
@@ -129,9 +128,11 @@ const createImgBitmapHandler = (
 
   return (img) => {
     const now = performance.now()
+    const timestamp = (now - startTime) * 1000
+    const duration = (now - lastTime) * 1000
     const vf = new VideoFrame(img, {
-      timestamp: now - startTime,
-      duration: now - lastTime
+      timestamp,
+      duration
     })
     lastTime = now
 
