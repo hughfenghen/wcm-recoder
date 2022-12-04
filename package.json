@@ -9,7 +9,7 @@
     "dist"
   ],
   "scripts": {
-    "dev": "vite serve demo --host 0.0.0.0",
+    "dev": "vite serve demo",
     "build": "tsc"
   },
   "author": "hughfenghen",
