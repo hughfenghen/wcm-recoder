@@ -15,6 +15,7 @@
   "author": "hughfenghen",
   "license": "UNLICENSED",
   "devDependencies": {
+    "@types/dom-mediacapture-transform": "^0.1.4",
     "c8": "~7.11.2",
     "jsdom": "^19.0.0",
     "ts-standard": "~11.0.0",
@@ -23,7 +24,7 @@
     "vitest": "~0.9.3"
   },
   "dependencies": {
-    "mp4box": "~0.5.2",
-    "@types/dom-webcodecs": "~0.1.4"
+    "@types/dom-webcodecs": "~0.1.4",
+    "mp4box": "~0.5.2"
   }
 }

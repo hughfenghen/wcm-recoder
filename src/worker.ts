@@ -10,7 +10,6 @@ enum State {
 
 let STATE = State.Preparing
 let encoder: VideoEncoder
-let imgBitmapHandler: (img: ImageBitmap) => void
 
 self.onmessage = (evt: MessageEvent) => {
   const { type, data } = evt.data
@@ -22,17 +21,13 @@ self.onmessage = (evt: MessageEvent) => {
     case 'pause':
     case 'stop':
       break
-    case 'ImageBitmap':
-      // console.log('ImageBitmap', data)
-      imgBitmapHandler(data)
-      break
   }
 }
 
 function init (opts: IEncoderConf): void {
   STATE = State.Running
 
-  let getImgTimerId = 0
+  const getImgTimerId = 0
   const outHandler = createOutHandler(opts)
   encoder = new VideoEncoder({
     error: (err) => {
@@ -56,16 +51,13 @@ function init (opts: IEncoderConf): void {
     // avc: { format: 'annexb' }
   })
 
-  imgBitmapHandler = createImgBitmapHandler(encoder)
-  getImgTimerId = setInterval(() => {
-    self.postMessage({ type: 'getImageBitmap' })
-  }, 1000 / opts.fps)
+  encodeFrame(encoder, opts.videoFrameStream)
 
   const stream = convertFile2Stream(outHandler.outputFile)
   ; (self as DedicatedWorkerGlobalScope).postMessage({
     type: 'outputStream',
     data: stream
-  }, [stream] as any)
+  }, [stream])
 }
 
 const createOutHandler: (opts: IEncoderConf) => {
@@ -119,18 +111,31 @@ const createOutHandler: (opts: IEncoderConf) => {
   }
 }
 
-const createImgBitmapHandler = (
-  encoder: VideoEncoder
-): (img: ImageBitmap) => void => {
+const encodeFrame = (
+  encoder: VideoEncoder,
+  stream: ReadableStream<VideoFrame>
+): void => {
   let frameCount = 0
   const startTime = performance.now()
   let lastTime = startTime
 
-  return (img) => {
+  const reader = stream.getReader()
+
+  run()
+    .catch(console.error)
+
+  async function run (): Promise<void> {
+    const { done, value: srouceFrame } = await reader.read()
+    if (done) return
+    if (srouceFrame == null) {
+      await run()
+      return
+    }
     const now = performance.now()
     const timestamp = (now - startTime) * 1000
     const duration = (now - lastTime) * 1000
-    const vf = new VideoFrame(img, {
+    // @ts-expect-error
+    const vf = new VideoFrame(srouceFrame, {
       timestamp,
       duration
     })
@@ -140,10 +145,10 @@ const createImgBitmapHandler = (
     encoder.encode(vf, { keyFrame: frameCount % 150 === 0 })
     vf.close()
     frameCount += 1
+
+    await run()
   }
 }
-
-// init (ImageBitmap) -> encoder -> outputhandler (h264) -> mp4box (mp4)
 
 function convertFile2Stream (file: MP4File): ReadableStream<ArrayBuffer> {
   let timerId = 0

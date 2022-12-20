@@ -74,8 +74,11 @@ async function loadData(reader: ReadableStreamDefaultReader) {
   const { done, value } = await reader.read()
   if (done) return
 
-  value.fileStart = offset
-  offset = mfile.appendBuffer(value)
+  if (value.byteLength > 0) {
+    value.fileStart = offset
+    offset = mfile.appendBuffer(value)
+  }
+
   await loadData(reader)
 }
 
