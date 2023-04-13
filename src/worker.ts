@@ -77,8 +77,6 @@ const createOutHandler: (opts: IEncoderConf) => {
   }
 
   let vTrackId: number
-  const startTime = performance.now()
-  let lastTime = startTime
 
   return {
     outputFile,
@@ -90,18 +88,15 @@ const createOutHandler: (opts: IEncoderConf) => {
       const buf = new ArrayBuffer(chunk.byteLength)
       chunk.copyTo(buf)
 
-      const now = performance.now()
-      const dts = (now - startTime) * 1000
-      const duration = (now - lastTime) * 1000
-      // console.log(44444, 'chunk', { dts, duration })
-      lastTime = now
+      const dts = chunk.timestamp
+
       // todo: insert sei
       outputFile.addSample(
         vTrackId,
         buf,
         {
           // 每帧时长，单位微秒
-          duration,
+          duration: chunk.duration ?? 0,
           dts,
           cts: dts,
           is_sync: chunk.type === 'key'
