@@ -1,4 +1,7 @@
 # wcm-recoder
+
+## Deprecate: This is a simple example that is no longer maintained, please use [@webav/av-recorder](https://github.com/hughfenghen/WebAV/blob/main/packages/av-recorder/README.md)  
+
 Use mp4box.js + webcodecs mux to mp4 file and play it with MSE.  
 
 The data flow:  
